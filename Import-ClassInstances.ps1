@@ -1,9 +1,9 @@
 <#
 .SYNOPSIS
-    A script to import class instances (work item or configuration item based classes), related items and file attachments from CSV file exported using the Export-ClassInstances.ps1 script (https://github.com/bennyguk/Export-ClassInstances)
+    A script to import class instances (work item or configuration item based classes), link related items and import file attachments exported using the Export-ClassInstances.ps1 script (https://github.com/bennyguk/Export-ClassInstances)
 .DESCRIPTION
-    This script could be useful if you need to import class instances in bulk if you need to make changes to a custom class
-    that are not upgrade compatible exported using Export-ClassInstances.ps1  (https://github.com/bennyguk/Export-ClassInstances).
+    This script could be useful if you need to import class instances in bulk when makeing changes to a custom class
+    that are not upgrade compatible and have first been exported using Export-ClassInstances.ps1  (https://github.com/bennyguk/Export-ClassInstances).
     
     For more information, please see https://github.com/bennyguk/Import-ClassInstances
 
@@ -82,7 +82,7 @@ else {
 
 # Get type projection inforamtion for the file attachment
 $tp = Get-SCSMTypeProjection $class
-# Create a hashtable with the any type projections that have a name of System.FileAttachment
+# Create a hashtable with the any type projections for the class that have a name of System.FileAttachment
 $tpOptions = @{}
 $i = 0
 foreach ($tpClassName in $tp) {
@@ -111,13 +111,15 @@ if ($tpOptions.Count -gt 1) {
     $classTypeProj = $tpOptions[$typeProjNumber -as [int]]
 }
 else {
-    $classTypeProj = $object.typeProjection.Name
+    $classTypeProj = $tp.TypeProjection.Name
 }
 Function Add-FileAttachment {
 
-    param($fileName, $documentID)
-
-    Foreach ($file in $fileName) {
+    param($files, $documentID)
+    $filecounter = 0
+    Foreach ($file in $files) {
+        $fileCounter++
+        Write-Progress -Id 1 -ParentId 0 -Status "Processing $($FileCounter) of $($files.count)" -Activity "Importing files" -CurrentOperation $file.Name -PercentComplete (($fileCounter / $files.count) * 100)
         $fileClass = Get-SCSMClass -name "System.FileAttachment"
         $typeProj = Get-SCSMObjectProjection $classTypeProj -filter "ID -eq $documentID"
         $fileMode = [System.IO.FileMode]::Open
@@ -140,21 +142,23 @@ Function Add-FileAttachment {
 
 # Main script
 
-# Create a hashtables from the CSVs
+# Create hashtables from the CSVs
 $htClassInstance = @{}
 $htRelInstance = @{}
 if ($ImportCsv[0]) {
-
-    Foreach ($ciInstance in $ImportCsv) {
-        # Add all keys and values to a hashtable and set any blank values to null where they exist.
-        $propertyCount = $ciInstance.psobject.properties.name.count
+    $cICounter = 0
+    Foreach ($classInstance in $ImportCsv) {
+        $cICounter++
+        Write-Progress -Id 0 -Status "Processing $($cICounter) of $($ImportCsv.count)" -Activity "Importing all instances of $($class.DisplayName)" -CurrentOperation $classInstance.DisplayName -PercentComplete (($cICounter / $ImportCsv.count) * 100)
+        # Add all keys and values to a hashtable and set any blank values to null where they exist. This prevents errors about costing to string later.
+        $propertyCount = $classInstance.psobject.properties.name.count
         for ($i = 0 ; $i -lt $propertyCount ; $i++) {
-            $htClassInstance[$ciInstance.psobject.properties.name[$i]] = $ciInstance.psobject.properties.value[$i]
-            if ($htClassInstance[$ciInstance.psobject.properties.name[$i]] -eq "") {
-                $htClassInstance[$ciInstance.psobject.properties.name[$i]] = $null
+            $htClassInstance[$classInstance.psobject.properties.name[$i]] = $classInstance.psobject.properties.value[$i]
+            if ($htClassInstance[$classInstance.psobject.properties.name[$i]] -eq "") {
+                $htClassInstance[$classInstance.psobject.properties.name[$i]] = $null
             }
         }
-        # Create a new instance of the target class with the properties and values defined in the hashtable
+        # Create a new instance of the target class with the keys and values defined in the hashtable
         Try {
             $newClassInstance = New-SCSMObject -Class $Class -PropertyHashtable $htClassInstance -PassThru -ErrorAction Stop
         }
@@ -167,7 +171,7 @@ if ($ImportCsv[0]) {
         $docID = $newClassInstance.Id
         if (Test-Path $FilePath\ExportedAttachments\$docID) {
             $files = get-childitem $FilePath\ExportedAttachments\$docID
-            Add-FileAttachment -fileName $files -documentID $docID
+            Add-FileAttachment -files $files -documentID $docID
         }
         # Create relationships and related items if they exist
         if ($ImportRelCsv[0]) {
@@ -175,8 +179,13 @@ if ($ImportCsv[0]) {
             # Get the key property of the newly created class instance
             $ciKey = ($newClassInstance.GetProperties() | Where-Object { $_.Key -eq "True" }).Name
 
-            # Load the rerlated items for only the key property that corresponds to the $newClassInstance key property
-            $relInstance = $ImportRelCsv | Where-Object { $_.$ciKey -eq $newClassInstance.(($newClassInstance.GetProperties() | Where-Object { $_.Key -eq "True" }).Name) }
+            # If the class does not have a key property, add the internal ID instead. This is needed incase you change your class to have a key later, otherwise the import will fail.
+            if (!$ciKey) {
+                $ciKey = "ID"
+            }
+
+            # Load the related items for only the key property that corresponds to the $newClassInstance key property
+            $relInstance = $ImportRelCsv | Where-Object { $_.$ciKey -eq $newClassInstance.$ciKey }
             # Add all keys and values to a hashtable and set any blank values to null where they exist.
             $propertyCount2 = $relInstance.psobject.properties.name.count
             for ($i2 = 0 ; $i2 -lt $propertyCount2 ; $i2++) {
@@ -185,8 +194,10 @@ if ($ImportCsv[0]) {
                     $htRelInstance[$relInstance.psobject.properties.name[$i2]] = $null
                 }
             }
-            # filter out file attachment related relationships as these are handled by the Add-Attachment function.
+            # Create new relationship instances from the $htRelInstance hashtable
             foreach ($relationshipObject in $htRelInstance.GetEnumerator()) {
+
+                # filter out file attachment related relationships as these are handled by the Add-Attachment function.
                 if ($relationshipObject.Key -notlike "*Attachment*") {
                     $relationship = Get-SCSMRelationshipClass $relationshipObject.Key
                     if ($relationshipObject.Value) {
@@ -196,8 +207,7 @@ if ($ImportCsv[0]) {
                                 # sometimes there maybe more than one related item of a particular display name, so the script will just choose the first.
                                 $relItemValue = (Get-SCClassInstance -Class ($relationship.Target.Class) -Filter "DisplayName -eq $relationshipObjectValue") | Select-Object -first 1
                                 if ($relItemValue) {
-                                    Write-Host $relItemValue "/" $relationship.GetType() -ForegroundColor Green
-                                    New-SCRelationshipInstance -RelationshipClass $relationship -Source $newClassInstance -Target $relItemValue -PassThru
+                                    New-SCRelationshipInstance -RelationshipClass $relationship -Source $newClassInstance -Target $relItemValue -PassThru > $null
                                 }
                             }
 
@@ -205,10 +215,9 @@ if ($ImportCsv[0]) {
                         else {
                             $relValueName = $relationshipObject.Value
                             # sometimes there maybe more than one related item of a particular display name, so the script will just choose the first.
-                            $relItemValue = (Get-SCClassInstance -Class ($relationship.Target.Class) -Filter "DisplayName -eq $relValueName") | Select-Object -first 1
+                            $relItemValue = (Get-SCClassInstance -Class ($relationship.Target.Class) -Filter "DisplayName -eq $relValueName") | Select-Object -First 1
                             if ($relItemValue) {
-                                Write-Host $relItemValue "/" $relationship.GetType() -ForegroundColor Green
-                                New-SCRelationshipInstance -RelationshipClass $relationship -Source $newClassInstance -Target $relItemValue -PassThru
+                                New-SCRelationshipInstance -RelationshipClass $relationship -Source $newClassInstance -Target $relItemValue -PassThru > $null
                             }
                         }
                     }    
