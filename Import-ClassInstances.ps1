@@ -179,7 +179,7 @@ if ($ImportCsv[0]) {
             # Get the key property of the newly created class instance
             $ciKey = ($newClassInstance.GetProperties() | Where-Object { $_.Key -eq "True" }).Name
 
-            # If the class does not have a key property, add the internal ID instead. This is needed incase you change your class to have a key later, otherwise the import will fail.
+            # If the class does not have a key property, add the internal ID instead. This is needed incase you change your class to have a key property later, otherwise the import will fail. The ID or key property is also used to import files.
             if (!$ciKey) {
                 $ciKey = "ID"
             }
