@@ -6,16 +6,12 @@
     that are not upgrade compatible and have first been exported using Export-ClassInstances.ps1  (https://github.com/bennyguk/Export-ClassInstances).
     
     For more information, please see https://github.com/bennyguk/Import-ClassInstances
-
 .PARAMETER ClassName
     Specifies the class name you wish to work with.
-
 .PARAMETER FilePath
     Specifies the path to the folder you wish to import class instances and file attachments from.
-
 .PARAMETER FileName
     Specifies name of the CSV file - Will default to Export.csv
-
 .PARAMETER ComputerName
     Specifies the SCSM server to connect to - Will default to localhost.
     
@@ -26,8 +22,8 @@ Param (
     [parameter(mandatory)][string] $ClassName,
     [parameter(Mandatory, HelpMessage = "Enter a path to the exported CSV directory, excluding the filename")][string] $FilePath,
     [string] $FileName = "Export.csv",
-    [parameter(HelpMessage = "Enter Managment Server Computer Name")]
-    [string] $ComputerName = "localhost"
+    [parameter(Mandatory, HelpMessage = "Enter Managment Server Computer Name")]
+    [string] $ComputerName
 )
 
 # Import modules and set SCSM Management Server computer name
@@ -205,9 +201,9 @@ if ($ImportCsv[0]) {
                             $relationshipObjectValues = $relationshipObject.Value -split ","
                             foreach ($relationshipObjectValue in $relationshipObjectValues) {
                                 # sometimes there maybe more than one related item of a particular display name, so the script will just choose the first.
-                                $relItemValue = (Get-SCClassInstance -Class ($relationship.Target.Class) -Filter "DisplayName -eq $relationshipObjectValue") | Select-Object -first 1
+                                $relItemValue = (Get-SCClassInstance -ComputerName $ComputerName -Class ($relationship.Target.Class) -Filter "DisplayName -eq $relationshipObjectValue") | Select-Object -first 1
                                 if ($relItemValue) {
-                                    New-SCRelationshipInstance -RelationshipClass $relationship -Source $newClassInstance -Target $relItemValue -PassThru > $null
+                                    New-SCRelationshipInstance -ComputerName $ComputerName -RelationshipClass $relationship -Source $newClassInstance -Target $relItemValue -PassThru > $null
                                 }
                             }
 
@@ -215,9 +211,9 @@ if ($ImportCsv[0]) {
                         else {
                             $relValueName = $relationshipObject.Value
                             # sometimes there maybe more than one related item of a particular display name, so the script will just choose the first.
-                            $relItemValue = (Get-SCClassInstance -Class ($relationship.Target.Class) -Filter "DisplayName -eq $relValueName") | Select-Object -First 1
+                            $relItemValue = (Get-SCClassInstance -ComputerName $ComputerName -Class ($relationship.Target.Class) -Filter "DisplayName -eq $relValueName") | Select-Object -First 1
                             if ($relItemValue) {
-                                New-SCRelationshipInstance -RelationshipClass $relationship -Source $newClassInstance -Target $relItemValue -PassThru > $null
+                                New-SCRelationshipInstance -ComputerName $ComputerName -RelationshipClass $relationship -Source $newClassInstance -Target $relItemValue -PassThru > $null
                             }
                         }
                     }    
