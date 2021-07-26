@@ -146,7 +146,7 @@ if ($ImportCsv[0]) {
     Foreach ($classInstance in $ImportCsv) {
         $cICounter++
         Write-Progress -Id 0 -Status "Processing $($cICounter) of $($ImportCsv.count)" -Activity "Importing all instances of $($class.DisplayName)" -CurrentOperation $classInstance.DisplayName -PercentComplete (($cICounter / $ImportCsv.count) * 100)
-        # Add all keys and values to a hashtable and set any blank values to null where they exist. This prevents errors about costing to string later.
+        # Add all keys and values to a hashtable and set any blank values to null where they exist. This prevents errors about casting to strings later in the script.
         $propertyCount = $classInstance.psobject.properties.name.count
         for ($i = 0 ; $i -lt $propertyCount ; $i++) {
             $htClassInstance[$classInstance.psobject.properties.name[$i]] = $classInstance.psobject.properties.value[$i]
@@ -175,7 +175,7 @@ if ($ImportCsv[0]) {
             # Get the key property of the newly created class instance
             $ciKey = ($newClassInstance.GetProperties() | Where-Object { $_.Key -eq "True" }).Name
 
-            # If the class does not have a key property, add the internal ID instead. This is needed incase you change your class to have a key later, otherwise the import will fail.
+            # If the class does not have a key property, add the internal ID instead. This is needed in case you change your class to have a key later, otherwise the import will fail.
             if (!$ciKey) {
                 $ciKey = "ID"
             }
@@ -193,14 +193,14 @@ if ($ImportCsv[0]) {
             # Create new relationship instances from the $htRelInstance hashtable
             foreach ($relationshipObject in $htRelInstance.GetEnumerator()) {
 
-                # filter out file attachment related relationships as these are handled by the Add-Attachment function, SLAs or Request Offerings as they cannot be inserted with New-SCRelationshipInstance
+                # Filter out file attachment related relationships as these are handled by the Add-Attachment function, SLAs or Request Offerings as they cannot be inserted with New-SCRelationshipInstance
                 if ($relationshipObject.Key -notlike "*Attachment*" -And $relationshipObject.Key -notlike "*SLA*" -And $relationshipObject.Key -notlike "*RequestOffering*" -And $relationshipObject.Key -notlike "*BillableTimeHasWorkingUser*") {
                     $relationship = Get-SCSMRelationshipClass $relationshipObject.Key
                     if ($relationshipObject.Value) {
                         if ($relationshipObject.Value -match ",") {
                             $relationshipObjectValues = $relationshipObject.Value -split ","
                             foreach ($relationshipObjectValue in $relationshipObjectValues) {
-                                # sometimes there maybe more than one related item of a particular display name, so the script will just choose the first.
+                                # Sometimes there maybe more than one related item with a particular display name, so the script will just choose the first.
                                 $relItemValue = (Get-SCClassInstance -ComputerName $ComputerName -Class ($relationship.Target.Class) -Filter "DisplayName -eq $relationshipObjectValue") | Select-Object -first 1
                                 if ($relItemValue) {
                                     New-SCRelationshipInstance -ComputerName $ComputerName -RelationshipClass $relationship -Source $newClassInstance -Target $relItemValue -PassThru > $null
@@ -210,7 +210,7 @@ if ($ImportCsv[0]) {
                         }
                         else {
                             $relValueName = $relationshipObject.Value
-                            # sometimes there maybe more than one related item of a particular display name, so the script will just choose the first.
+                            # Sometimes there maybe more than one related item of a particular display name, so the script will just choose the first.
                             $relItemValue = (Get-SCClassInstance -ComputerName $ComputerName -Class ($relationship.Target.Class) -Filter "DisplayName -eq $relValueName") | Select-Object -First 1
                             if ($relItemValue) {
                                 New-SCRelationshipInstance -ComputerName $ComputerName -RelationshipClass $relationship -Source $newClassInstance -Target $relItemValue -PassThru > $null
