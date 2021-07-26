@@ -2,7 +2,7 @@
 .SYNOPSIS
     A script to import class instances (work item or configuration item based classes), link related items and import file attachments exported using the Export-ClassInstances.ps1 script (https://github.com/bennyguk/Export-ClassInstances)
 .DESCRIPTION
-    This script could be useful if you need to import class instances in bulk when makeing changes to a custom class
+    This script could be useful if you need to import class instances in bulk when making changes to a custom class
     that are not upgrade compatible and have first been exported using Export-ClassInstances.ps1  (https://github.com/bennyguk/Export-ClassInstances).
     
     For more information, please see https://github.com/bennyguk/Import-ClassInstances
@@ -22,7 +22,7 @@ Param (
     [parameter(mandatory)][string] $ClassName,
     [parameter(Mandatory, HelpMessage = "Enter a path to the exported CSV directory, excluding the filename")][string] $FilePath,
     [string] $FileName = "Export.csv",
-    [parameter(Mandatory, HelpMessage = "Enter Managment Server Computer Name")]
+    [parameter(Mandatory, HelpMessage = "Enter Management Server Computer Name")]
     [string] $ComputerName
 )
 
@@ -76,9 +76,10 @@ else {
     $fileAttachmentRel = Get-SCSMRelationshipClass "System.WorkItemHasFileAttachment"
 }
 
-# Get type projection inforamtion for the file attachment
+# Get type projection information for the file attachment
 $tp = Get-SCSMTypeProjection $class
-# Create a hashtable with the any type projections for the class that have a name of System.FileAttachment
+
+# Create a hash table with the any type projections for the class that have a name of System.FileAttachment
 $tpOptions = @{}
 $i = 0
 foreach ($tpClassName in $tp) {
@@ -138,7 +139,7 @@ Function Add-FileAttachment {
 
 # Main script
 
-# Create hashtables from the CSVs
+# Create hash tables from the CSVs
 $htClassInstance = @{}
 $htRelInstance = @{}
 if ($ImportCsv[0]) {
@@ -146,7 +147,7 @@ if ($ImportCsv[0]) {
     Foreach ($classInstance in $ImportCsv) {
         $cICounter++
         Write-Progress -Id 0 -Status "Processing $($cICounter) of $($ImportCsv.count)" -Activity "Importing all instances of $($class.DisplayName)" -CurrentOperation $classInstance.DisplayName -PercentComplete (($cICounter / $ImportCsv.count) * 100)
-        # Add all keys and values to a hashtable and set any blank values to null where they exist. This prevents errors about casting to strings later in the script.
+        # Add all keys and values to a hash table and set any blank values to null where they exist. This prevents errors about casting to strings later in the script.
         $propertyCount = $classInstance.psobject.properties.name.count
         for ($i = 0 ; $i -lt $propertyCount ; $i++) {
             $htClassInstance[$classInstance.psobject.properties.name[$i]] = $classInstance.psobject.properties.value[$i]
@@ -154,12 +155,12 @@ if ($ImportCsv[0]) {
                 $htClassInstance[$classInstance.psobject.properties.name[$i]] = $null
             }
         }
-        # Create a new instance of the target class with the keys and values defined in the hashtable
+        # Create a new instance of the target class with the keys and values defined in the hash table
         Try {
             $newClassInstance = New-SCSMObject -Class $Class -PropertyHashtable $htClassInstance -PassThru -ErrorAction Stop
         }
         catch {
-            Write-Host ("An error has occured creating a new class instance. The error message was:") -ForegroundColor Red
+            Write-Host ("An error has occurred creating a new class instance. The error message was:") -ForegroundColor Red
             Write-Host $_ -ForegroundColor Red
             Exit
         }
@@ -182,7 +183,7 @@ if ($ImportCsv[0]) {
 
             # Load the related items for only the key property that corresponds to the $newClassInstance key property
             $relInstance = $ImportRelCsv | Where-Object { $_.$ciKey -eq $newClassInstance.$ciKey }
-            # Add all keys and values to a hashtable and set any blank values to null where they exist.
+            # Add all keys and values to a hash table and set any blank values to null where they exist.
             $propertyCount2 = $relInstance.psobject.properties.name.count
             for ($i2 = 0 ; $i2 -lt $propertyCount2 ; $i2++) {
                 $htRelInstance[$relInstance.psobject.properties.name[$i2]] = $relInstance.psobject.properties.value[$i2]
@@ -190,7 +191,7 @@ if ($ImportCsv[0]) {
                     $htRelInstance[$relInstance.psobject.properties.name[$i2]] = $null
                 }
             }
-            # Create new relationship instances from the $htRelInstance hashtable
+            # Create new relationship instances from the $htRelInstance hash table
             foreach ($relationshipObject in $htRelInstance.GetEnumerator()) {
 
                 # Filter out file attachment related relationships as these are handled by the Add-Attachment function, SLAs or Request Offerings as they cannot be inserted with New-SCRelationshipInstance
